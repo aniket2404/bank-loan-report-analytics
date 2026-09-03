@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bank-loan-report"
+version = "2.0.0"
+description = "End-to-end bank loan analytics: SQL Server, Python, Power BI, Excel and Tableau"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["data-analysis", "finance", "sql", "power-bi", "tableau", "portfolio"]
+dependencies = [
+    "pandas>=2.0,<3.0",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+    "matplotlib>=3.7",
+    "squarify>=0.4.3",
+    "openpyxl>=3.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+sql = ["sqlalchemy>=2.0", "pyodbc>=5.0"]
+dev = ["pytest>=7.4", "ruff>=0.4", "nbconvert>=7.0", "nbformat>=5.9"]
+
+[project.scripts]
+bank-loan-report = "bank_loan_report.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

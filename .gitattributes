@@ -1,0 +1,15 @@
+# The notebook is committed with its executed outputs so the analysis is
+# readable on GitHub without running anything. Those outputs are large, which
+# made GitHub's language bar report the project as ~75% "Jupyter Notebook" and
+# hid the Python and T-SQL that the project is actually built from. Marking the
+# notebook as documentation keeps it rendered and browsable but excludes it from
+# the language statistics.
+*.ipynb linguist-documentation
+
+# Generated figures are committed deliberately (see .gitignore) but are output,
+# not source.
+reports/figures/*.png linguist-generated
+
+# Normalise line endings so the same file does not show as modified on Windows.
+* text=auto eol=lf
+*.png binary
