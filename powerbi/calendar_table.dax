@@ -1,0 +1,41 @@
+// ==========================================================================
+// BANK LOAN REPORT | Power BI date dimension
+// --------------------------------------------------------------------------
+// Modeling > New table, then paste this expression.
+// A dedicated date table is required for DATESMTD / DATEADD to behave correctly.
+// After creating it: select the table > Table tools > Mark as date table > Date.
+// Then relate date_table[Date] (1) --> bank_loan_data[issue_date] (*).
+// ==========================================================================
+
+date_table =
+VAR _min = MIN ( bank_loan_data[issue_date] )
+VAR _max = MAX ( bank_loan_data[issue_date] )
+VAR _base =
+    CALENDAR (
+        DATE ( YEAR ( _min ), 1, 1 ),
+        DATE ( YEAR ( _max ), 12, 31 )
+    )
+RETURN
+    ADDCOLUMNS (
+        _base,
+        "Year",            YEAR ( [Date] ),
+        "Quarter",         "Q" & QUARTER ( [Date] ),
+        "Month Number",    MONTH ( [Date] ),
+        "Month Name",      FORMAT ( [Date], "MMMM" ),
+        "Month Short",     FORMAT ( [Date], "MMM" ),
+        "Year Month",      FORMAT ( [Date], "YYYY-MM" ),
+        "Day",             DAY ( [Date] ),
+        "Weekday Number",  WEEKDAY ( [Date], 2 ),
+        "Weekday Name",    FORMAT ( [Date], "dddd" ),
+        "Is Weekend",      IF ( WEEKDAY ( [Date], 2 ) > 5, TRUE (), FALSE () ),
+        "Start of Month",  EOMONTH ( [Date], -1 ) + 1,
+        "End of Month",    EOMONTH ( [Date], 0 )
+    )
+
+
+// --------------------------------------------------------------------------
+// Sort "Month Name" by "Month Number" so visuals read January .. December
+// instead of alphabetically:
+//   select date_table[Month Name] > Column tools > Sort by column > Month Number
+// Do the same for [Month Short].
+// --------------------------------------------------------------------------

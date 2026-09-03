@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # pyodbc needs system ODBC headers, so install the analysis deps only
+          python -m pip install "pandas>=2.0,<3.0" "numpy>=1.24" "scipy>=1.10" \
+            "scikit-learn>=1.3" "matplotlib>=3.7" "squarify>=0.4.3" "openpyxl>=3.1" \
+            "python-dotenv>=1.0" pytest ruff nbconvert nbformat sqlglot
+          python -m pip install -e . --no-deps
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Test
+        # exact-figure tests self-skip when the full dataset is absent,
+        # so CI validates structure and business rules on the bundled sample
+        run: pytest -v
+
+      - name: Validate the bundled sample dataset
+        # exits non-zero if a KPI-guarding assumption is violated
+        run: python -m bank_loan_report --sample validate
+
+      - name: Smoke-test the CLI
+        run: |
+          python -m bank_loan_report --sample report
+          python -m bank_loan_report --sample insights
+          python -m bank_loan_report --sample charts --outdir /tmp/figures
+          python -m bank_loan_report --sample charts --risk-only --outdir /tmp/figures
+          python -m bank_loan_report --sample export --outdir /tmp/tables
+          python -m bank_loan_report --sample quality
+          ls -la /tmp/figures /tmp/tables

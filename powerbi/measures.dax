@@ -1,0 +1,229 @@
+// ==========================================================================
+// BANK LOAN REPORT | Power BI DAX measures
+// --------------------------------------------------------------------------
+// Model
+//   bank_loan_data  (fact)   - imported from SQL Server view dbo.vw_bank_loan_enriched
+//   date_table      (dim)    - built with the CALENDAR script in calendar_table.dax
+//   Relationship: date_table[Date] 1 --> * bank_loan_data[issue_date]  (single direction)
+//
+// Paste each block into Power BI Desktop: Modeling > New measure.
+// int_rate and dti are decimal fractions in the source, so they are * 100.
+// ==========================================================================
+
+
+// ---------- 1. Headline totals -------------------------------------------
+Total Loan Applications = COUNT ( bank_loan_data[id] )
+
+Total Funded Amount = SUM ( bank_loan_data[loan_amount] )
+
+Total Amount Received = SUM ( bank_loan_data[total_payment] )
+
+Avg Interest Rate = AVERAGE ( bank_loan_data[int_rate] ) * 100
+
+Avg DTI = AVERAGE ( bank_loan_data[dti] ) * 100
+
+
+// ---------- 2. Month-to-date (MTD) ---------------------------------------
+MTD Loan Applications =
+CALCULATE (
+    [Total Loan Applications],
+    DATESMTD ( date_table[Date] )
+)
+
+MTD Funded Amount =
+CALCULATE (
+    [Total Funded Amount],
+    DATESMTD ( date_table[Date] )
+)
+
+MTD Amount Received =
+CALCULATE (
+    [Total Amount Received],
+    DATESMTD ( date_table[Date] )
+)
+
+MTD Avg Interest Rate =
+CALCULATE (
+    [Avg Interest Rate],
+    DATESMTD ( date_table[Date] )
+)
+
+MTD Avg DTI =
+CALCULATE (
+    [Avg DTI],
+    DATESMTD ( date_table[Date] )
+)
+
+
+// ---------- 3. Previous month-to-date (PMTD) ------------------------------
+PMTD Loan Applications =
+CALCULATE (
+    [Total Loan Applications],
+    DATESMTD ( DATEADD ( date_table[Date], -1, MONTH ) )
+)
+
+PMTD Funded Amount =
+CALCULATE (
+    [Total Funded Amount],
+    DATESMTD ( DATEADD ( date_table[Date], -1, MONTH ) )
+)
+
+PMTD Amount Received =
+CALCULATE (
+    [Total Amount Received],
+    DATESMTD ( DATEADD ( date_table[Date], -1, MONTH ) )
+)
+
+PMTD Avg Interest Rate =
+CALCULATE (
+    [Avg Interest Rate],
+    DATESMTD ( DATEADD ( date_table[Date], -1, MONTH ) )
+)
+
+PMTD Avg DTI =
+CALCULATE (
+    [Avg DTI],
+    DATESMTD ( DATEADD ( date_table[Date], -1, MONTH ) )
+)
+
+
+// ---------- 4. Month-over-month (MoM) change ------------------------------
+// Shown under each KPI card as "MoM: x%". DIVIDE guards against divide-by-zero.
+
+MoM Loan Applications =
+DIVIDE ( [MTD Loan Applications] - [PMTD Loan Applications], [PMTD Loan Applications] )
+
+MoM Funded Amount =
+DIVIDE ( [MTD Funded Amount] - [PMTD Funded Amount], [PMTD Funded Amount] )
+
+MoM Amount Received =
+DIVIDE ( [MTD Amount Received] - [PMTD Amount Received], [PMTD Amount Received] )
+
+MoM Avg Interest Rate =
+DIVIDE ( [MTD Avg Interest Rate] - [PMTD Avg Interest Rate], [PMTD Avg Interest Rate] )
+
+MoM Avg DTI =
+DIVIDE ( [MTD Avg DTI] - [PMTD Avg DTI], [PMTD Avg DTI] )
+
+
+// ---------- 5. Good loan KPIs --------------------------------------------
+// Good Loan = loan_status IN { "Fully Paid", "Current" }
+//
+// The standard instead creates a Power BI *group* on loan_status (right-click the
+// field > New group > put "Fully Paid" and "Current" in a "Good Loan" group and
+// "Charged Off" in a "Bad Loan" group). The measures below are equivalent and keep
+// the rule visible in code, matching the SQL and Python layers.
+
+Good Loan Applications =
+CALCULATE (
+    [Total Loan Applications],
+    bank_loan_data[loan_status] IN { "Fully Paid", "Current" }
+)
+
+Good Loan Percentage =
+DIVIDE ( [Good Loan Applications], [Total Loan Applications] )
+
+Good Loan Funded Amount =
+CALCULATE (
+    [Total Funded Amount],
+    bank_loan_data[loan_status] IN { "Fully Paid", "Current" }
+)
+
+Good Loan Amount Received =
+CALCULATE (
+    [Total Amount Received],
+    bank_loan_data[loan_status] IN { "Fully Paid", "Current" }
+)
+
+
+// ---------- 6. Bad loan KPIs ---------------------------------------------
+// Bad Loan = loan_status = "Charged Off"
+
+Bad Loan Applications =
+CALCULATE (
+    [Total Loan Applications],
+    bank_loan_data[loan_status] = "Charged Off"
+)
+
+Bad Loan Percentage =
+DIVIDE ( [Bad Loan Applications], [Total Loan Applications] )
+
+Bad Loan Funded Amount =
+CALCULATE (
+    [Total Funded Amount],
+    bank_loan_data[loan_status] = "Charged Off"
+)
+
+Bad Loan Amount Received =
+CALCULATE (
+    [Total Amount Received],
+    bank_loan_data[loan_status] = "Charged Off"
+)
+
+
+// ---------- 7. Dynamic measure for the Overview page ----------------------
+// The Overview visuals switch between the three measures from one slicer.
+// Step 1: create a disconnected table (Modeling > New table):
+//
+//   measure_selection =
+//   DATATABLE (
+//       "Measure Name", STRING,
+//       "Sort Order",   INTEGER,
+//       {
+//           { "Total Loan Applications", 1 },
+//           { "Total Funded Amount",     2 },
+//           { "Total Amount Received",   3 }
+//       }
+//   )
+//
+// Step 2: put measure_selection[Measure Name] in a slicer, then use this measure
+// on every Overview visual.
+//
+// ALTERNATIVE (standard implementation): use a native field parameter instead.
+//   Modeling > New parameter > Fields, name it "Select a Measure", tick
+//   [Total Loan Applications], [Total Funded Amount], [Total Amount Received].
+//   Power BI generates the table for you; drop it in a single-select slicer and put
+//   the parameter itself on the Values well of each Overview visual.
+// Field parameters need a recent Power BI Desktop version; the SWITCH pattern below
+// works on every version and is easier to keep in source control.
+
+Selected Measure =
+VAR _choice =
+    SELECTEDVALUE ( measure_selection[Measure Name], "Total Loan Applications" )
+RETURN
+    SWITCH (
+        _choice,
+        "Total Loan Applications", [Total Loan Applications],
+        "Total Funded Amount",     [Total Funded Amount],
+        "Total Amount Received",   [Total Amount Received],
+        [Total Loan Applications]
+    )
+
+Selected Measure Title =
+"Total by " & SELECTEDVALUE ( measure_selection[Measure Name], "Total Loan Applications" )
+
+
+// ---------- 8. Formatting helpers ----------------------------------------
+// Used in card titles so large amounts read as 435.8M rather than 435,757,075.
+
+Total Funded Amount (short) =
+VAR _v = [Total Funded Amount]
+RETURN
+    SWITCH (
+        TRUE (),
+        _v >= 1000000000, FORMAT ( DIVIDE ( _v, 1000000000 ), "$0.00" ) & "B",
+        _v >= 1000000,    FORMAT ( DIVIDE ( _v, 1000000 ),    "$0.00" ) & "M",
+        _v >= 1000,       FORMAT ( DIVIDE ( _v, 1000 ),       "$0.00" ) & "K",
+        FORMAT ( _v, "$0" )
+    )
+
+Total Amount Received (short) =
+VAR _v = [Total Amount Received]
+RETURN
+    SWITCH (
+        TRUE (),
+        _v >= 1000000000, FORMAT ( DIVIDE ( _v, 1000000000 ), "$0.00" ) & "B",
+        _v >= 1000000,    FORMAT ( DIVIDE ( _v, 1000000 ),    "$0.00" ) & "M",
+        _v >= 1000,       FORMAT ( DIVIDE ( _v, 1000 ),       "$0.00" ) & "K",
+        FORMAT ( _v, "$0" )
+    )
